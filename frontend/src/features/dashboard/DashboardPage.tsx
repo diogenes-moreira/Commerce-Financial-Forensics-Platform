@@ -18,6 +18,10 @@ const summaryCards = [
   { title: 'Active Budgets', value: '3', color: '#2e7d32' },
   { title: 'Open Anomalies', value: '2', color: '#ed6c02' },
   { title: 'Cloud Accounts', value: '4', color: '#9c27b0' },
+  { title: 'Total Revenue (MTD)', value: '$45,200', color: '#1976d2' },
+  { title: 'Avg Margin', value: '23.4%', color: '#2e7d32' },
+  { title: 'Drift Alerts', value: '5', color: '#ed6c02' },
+  { title: 'Pending Payments', value: '12', color: '#9c27b0' },
 ];
 
 export default function DashboardPage() {

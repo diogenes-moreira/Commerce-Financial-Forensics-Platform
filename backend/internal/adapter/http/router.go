@@ -26,6 +26,30 @@ type RouterDeps struct {
 	BudgetHandler       *handler.BudgetHandler
 	AnomalyHandler      *handler.AnomalyHandler
 	CostReportHandler   *handler.CostReportHandler
+
+	// Commerce handlers
+	ProductHandler     *handler.ProductHandler
+	SellerHandler      *handler.SellerHandler
+	CustomerHandler    *handler.CustomerHandler
+	OrderHandler       *handler.OrderHandler
+
+	// Financial handlers
+	LedgerHandler       *handler.LedgerHandler
+	ForensicEventHandler *handler.ForensicEventHandler
+	DiscountHandler     *handler.DiscountHandler
+	PaymentHandler      *handler.PaymentHandler
+	ExchangeRateHandler *handler.ExchangeRateHandler
+
+	// Analytics handlers
+	MarginHandler *handler.MarginHandler
+	DriftHandler  *handler.DriftHandler
+	PnLHandler    *handler.PnLHandler
+
+	// Import handler
+	ImportHandler *handler.ImportHandler
+
+	// Integration handler
+	IntegrationHandler *handler.IntegrationHandler
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -91,6 +115,89 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		api.POST("/cost-reports", deps.CostReportHandler.Generate)
 		api.GET("/cost-reports", deps.CostReportHandler.List)
 		api.GET("/cost-reports/:id", deps.CostReportHandler.GetByID)
+
+		// Products
+		api.POST("/products", deps.ProductHandler.Create)
+		api.GET("/products", deps.ProductHandler.List)
+		api.GET("/products/:id", deps.ProductHandler.GetByID)
+		api.PUT("/products/:id", deps.ProductHandler.Update)
+
+		// Sellers
+		api.POST("/sellers", deps.SellerHandler.Create)
+		api.GET("/sellers", deps.SellerHandler.List)
+		api.GET("/sellers/:id", deps.SellerHandler.GetByID)
+		api.PUT("/sellers/:id", deps.SellerHandler.Update)
+
+		// Customers
+		api.POST("/customers", deps.CustomerHandler.Create)
+		api.GET("/customers", deps.CustomerHandler.List)
+		api.GET("/customers/:id", deps.CustomerHandler.GetByID)
+		api.PUT("/customers/:id", deps.CustomerHandler.Update)
+
+		// Orders
+		api.POST("/orders", deps.OrderHandler.Create)
+		api.GET("/orders", deps.OrderHandler.List)
+		api.GET("/orders/:id", deps.OrderHandler.GetByID)
+		api.POST("/orders/:id/items", deps.OrderHandler.AddItem)
+		api.POST("/orders/:id/confirm", deps.OrderHandler.Confirm)
+		api.POST("/orders/:id/ship", deps.OrderHandler.Ship)
+		api.POST("/orders/:id/deliver", deps.OrderHandler.Deliver)
+		api.POST("/orders/:id/cancel", deps.OrderHandler.Cancel)
+		api.POST("/orders/:id/refund", deps.OrderHandler.Refund)
+
+		// Ledger
+		api.GET("/ledger/entries", deps.LedgerHandler.ListEntries)
+		api.GET("/ledger/balance", deps.LedgerHandler.GetBalance)
+
+		// Forensic Events
+		api.GET("/events", deps.ForensicEventHandler.ListEvents)
+
+		// Promotion Rules & Discounts
+		api.POST("/promotion-rules", deps.DiscountHandler.CreateRule)
+		api.GET("/promotion-rules", deps.DiscountHandler.ListRules)
+		api.GET("/promotion-rules/:id", deps.DiscountHandler.GetRule)
+		api.POST("/promotion-rules/:id/disable", deps.DiscountHandler.DisableRule)
+		api.GET("/discount-applications", deps.DiscountHandler.ListApplications)
+
+		// Payments
+		api.POST("/payments", deps.PaymentHandler.Create)
+		api.GET("/payments", deps.PaymentHandler.List)
+		api.GET("/payments/:id", deps.PaymentHandler.GetByID)
+		api.POST("/payments/:id/process", deps.PaymentHandler.MarkProcessed)
+		api.POST("/payments/:id/fail", deps.PaymentHandler.MarkFailed)
+		api.POST("/payments/:id/refund", deps.PaymentHandler.MarkRefunded)
+
+		// Exchange Rates
+		api.POST("/exchange-rates", deps.ExchangeRateHandler.Create)
+		api.GET("/exchange-rates", deps.ExchangeRateHandler.List)
+		api.GET("/exchange-rates/latest", deps.ExchangeRateHandler.GetLatest)
+		api.GET("/exchange-rates/:id", deps.ExchangeRateHandler.GetByID)
+
+		// Margins
+		api.GET("/orders/:id/margin", deps.MarginHandler.GetOrderMargin)
+		api.GET("/margins", deps.MarginHandler.ListMargins)
+
+		// Drift
+		api.GET("/orders/:id/drift", deps.DriftHandler.GetOrderDrift)
+		api.GET("/drift-report", deps.DriftHandler.GetDriftReport)
+
+		// P&L and Cohorts
+		api.GET("/pnl", deps.PnLHandler.GetPL)
+		api.GET("/cohorts", deps.PnLHandler.GetCohorts)
+
+		// Imports
+		api.POST("/imports/upload", deps.ImportHandler.Upload)
+		api.GET("/imports", deps.ImportHandler.List)
+		api.GET("/imports/:id", deps.ImportHandler.GetByID)
+
+		// Integrations
+		api.POST("/integrations", deps.IntegrationHandler.Create)
+		api.GET("/integrations", deps.IntegrationHandler.List)
+		api.GET("/integrations/:id", deps.IntegrationHandler.GetByID)
+		api.PUT("/integrations/:id", deps.IntegrationHandler.Update)
+		api.DELETE("/integrations/:id", deps.IntegrationHandler.Delete)
+		api.POST("/integrations/:id/sync", deps.IntegrationHandler.TriggerSync)
+		api.POST("/webhooks/:integration_id", deps.IntegrationHandler.HandleWebhook)
 	}
 
 	return r

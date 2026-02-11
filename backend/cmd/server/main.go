@@ -67,6 +67,20 @@ func main() {
 	budgetHandler := handler.NewBudgetHandler()
 	anomalyHandler := handler.NewAnomalyHandler()
 	costReportHandler := handler.NewCostReportHandler()
+	productHandler := handler.NewProductHandler()
+	sellerHandler := handler.NewSellerHandler()
+	customerHandler := handler.NewCustomerHandler()
+	orderHandler := handler.NewOrderHandler()
+	ledgerHandler := handler.NewLedgerHandler()
+	forensicEventHandler := handler.NewForensicEventHandler()
+	discountHandler := handler.NewDiscountHandler()
+	paymentHandler := handler.NewPaymentHandler()
+	exchangeRateHandler := handler.NewExchangeRateHandler()
+	marginHandler := handler.NewMarginHandler()
+	driftHandler := handler.NewDriftHandler()
+	pnlHandler := handler.NewPnLHandler()
+	importHandler := handler.NewImportHandler()
+	integrationHandler := handler.NewIntegrationHandler()
 
 	// Router
 	router := httpAdapter.NewRouter(httpAdapter.RouterDeps{
@@ -82,6 +96,20 @@ func main() {
 		BudgetHandler:       budgetHandler,
 		AnomalyHandler:      anomalyHandler,
 		CostReportHandler:   costReportHandler,
+		ProductHandler:      productHandler,
+		SellerHandler:       sellerHandler,
+		CustomerHandler:     customerHandler,
+		OrderHandler:        orderHandler,
+		LedgerHandler:       ledgerHandler,
+		ForensicEventHandler: forensicEventHandler,
+		DiscountHandler:     discountHandler,
+		PaymentHandler:      paymentHandler,
+		ExchangeRateHandler: exchangeRateHandler,
+		MarginHandler:       marginHandler,
+		DriftHandler:        driftHandler,
+		PnLHandler:          pnlHandler,
+		ImportHandler:       importHandler,
+		IntegrationHandler:  integrationHandler,
 	})
 
 	// HTTP server
