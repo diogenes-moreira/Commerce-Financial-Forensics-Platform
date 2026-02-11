@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: costforensics
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: costforensics_system
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U costforensics"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      CF_SERVER_PORT: "8080"
+      CF_DB_HOST: postgres
+      CF_DB_PORT: "5432"
+      CF_DB_USER: costforensics
+      CF_DB_PASSWORD: localdev
+      CF_DB_SYSTEM_NAME: costforensics_system
+      CF_LOG_LEVEL: debug
+      CF_LOG_FORMAT: json
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

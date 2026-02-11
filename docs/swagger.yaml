@@ -1,0 +1,1109 @@
+openapi: 3.0.3
+info:
+  title: costForensics API
+  description: |
+    API REST para la plataforma de analisis de costos cloud costForensics.
+
+    ## Autenticacion
+    Todos los endpoints (excepto `/healthz`) requieren un token JWT en el header `Authorization: Bearer <token>`.
+    El JWT debe incluir los claims `user_id`, `tenant_id`, `email` y `role`.
+
+    ## Multi-tenancy
+    Los endpoints bajo `/api/v1/` (sin `/admin/`) son tenant-scoped. El `tenant_id` se extrae del JWT
+    y el middleware resuelve automaticamente la base de datos del tenant.
+
+    ## Montos monetarios
+    Todos los montos se expresan en **centavos** (campo `*_cents`). Ejemplo: `10050` = $100.50 USD.
+  version: 0.1.0
+  contact:
+    name: costForensics Team
+
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+  - url: https://api.costforensics.io
+    description: Produccion
+
+tags:
+  - name: Health
+    description: Health check del sistema
+  - name: Tenants
+    description: Administracion de tenants (requiere rol admin)
+  - name: Cloud Accounts
+    description: Gestion de cuentas cloud (AWS, GCP, Azure)
+  - name: Cost Records
+    description: Registros de costos por servicio
+  - name: Budgets
+    description: Presupuestos con alertas de umbral
+  - name: Anomalies
+    description: Deteccion de anomalias de costos
+  - name: Cost Reports
+    description: Reportes de costos agregados
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ─── Health ───────────────────────────────────────────────
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Verifica la salud del servicio y la conexion a la base de datos del sistema.
+      security: []
+      responses:
+        "200":
+          description: Servicio saludable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+        "503":
+          description: Servicio no disponible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Tenants (Admin) ─────────────────────────────────────
+  /api/v1/admin/tenants:
+    post:
+      tags: [Tenants]
+      summary: Crear tenant
+      description: |
+        Crea un nuevo tenant. Esto:
+        1. Crea una base de datos PostgreSQL dedicada (`cf_tenant_{uuid}`)
+        2. Ejecuta las migraciones del esquema tenant
+        3. Registra el tenant en la base de datos del sistema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenantRequest"
+            example:
+              name: "Acme Corporation"
+              slug: "acme-corp"
+      responses:
+        "201":
+          description: Tenant creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Tenants]
+      summary: Listar tenants
+      description: Retorna todos los tenants registrados en el sistema.
+      responses:
+        "200":
+          description: Lista de tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/admin/tenants/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    get:
+      tags: [Tenants]
+      summary: Obtener tenant por ID
+      responses:
+        "200":
+          description: Tenant encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Tenants]
+      summary: Actualizar tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTenantRequest"
+            example:
+              name: "Acme Corp Updated"
+      responses:
+        "200":
+          description: Tenant actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [Tenants]
+      summary: Eliminar tenant
+      description: Elimina el registro del tenant del sistema. No elimina la base de datos del tenant.
+      responses:
+        "204":
+          description: Tenant eliminado
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Cloud Accounts ──────────────────────────────────────
+  /api/v1/cloud-accounts:
+    post:
+      tags: [Cloud Accounts]
+      summary: Crear cuenta cloud
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCloudAccountRequest"
+            example:
+              provider: "aws"
+              name: "Production AWS"
+              external_id: "123456789012"
+      responses:
+        "201":
+          description: Cuenta creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudAccount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Cloud Accounts]
+      summary: Listar cuentas cloud
+      responses:
+        "200":
+          description: Lista de cuentas cloud
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CloudAccount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/cloud-accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    get:
+      tags: [Cloud Accounts]
+      summary: Obtener cuenta por ID
+      responses:
+        "200":
+          description: Cuenta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudAccount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Cloud Accounts]
+      summary: Actualizar cuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCloudAccountRequest"
+      responses:
+        "200":
+          description: Cuenta actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudAccount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [Cloud Accounts]
+      summary: Eliminar cuenta
+      responses:
+        "204":
+          description: Cuenta eliminada
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/cloud-accounts/{id}/sync:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    post:
+      tags: [Cloud Accounts]
+      summary: Iniciar sincronizacion
+      description: |
+        Inicia el proceso de sincronizacion de costos para la cuenta cloud.
+        La cuenta debe estar activa y no tener una sincronizacion en progreso.
+
+        Estado de sync: `idle` -> `running` -> `idle` (exito) o `failed` (error)
+      responses:
+        "200":
+          description: Sincronizacion iniciada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudAccount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: No se puede iniciar sincronizacion (ya esta corriendo o cuenta inactiva)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Cost Records ────────────────────────────────────────
+  /api/v1/cost-records:
+    post:
+      tags: [Cost Records]
+      summary: Crear registro de costo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCostRecordRequest"
+            example:
+              cloud_account_id: "550e8400-e29b-41d4-a716-446655440000"
+              service: "Amazon EC2"
+              amount_cents: 15023
+              currency: "USD"
+              usage_date: "2026-02-10"
+      responses:
+        "201":
+          description: Registro creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostRecord"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Cost Records]
+      summary: Listar registros de costos
+      description: Retorna registros de costos paginados con filtros opcionales.
+      parameters:
+        - name: cloud_account_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por cuenta cloud
+        - name: service
+          in: query
+          schema:
+            type: string
+          description: Filtrar por servicio (ej. "Amazon EC2")
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [compute, storage, network, database, analytics, ml, other]
+          description: Filtrar por categoria
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Fecha inicio (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Fecha fin (YYYY-MM-DD)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Registros paginados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedCostRecords"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/cost-records/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    get:
+      tags: [Cost Records]
+      summary: Obtener registro por ID
+      responses:
+        "200":
+          description: Registro encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Budgets ──────────────────────────────────────────────
+  /api/v1/budgets:
+    post:
+      tags: [Budgets]
+      summary: Crear presupuesto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBudgetRequest"
+            example:
+              name: "Q1 2026 Infra"
+              amount_cents: 5000000
+              currency: "USD"
+              period_start: "2026-01-01"
+              period_end: "2026-03-31"
+              alert_threshold_pct: 80
+      responses:
+        "201":
+          description: Presupuesto creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Budgets]
+      summary: Listar presupuestos
+      responses:
+        "200":
+          description: Lista de presupuestos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Budget"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/budgets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    get:
+      tags: [Budgets]
+      summary: Obtener presupuesto por ID
+      responses:
+        "200":
+          description: Presupuesto encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Budgets]
+      summary: Actualizar presupuesto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBudgetRequest"
+      responses:
+        "200":
+          description: Presupuesto actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/budgets/{id}/spend:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    post:
+      tags: [Budgets]
+      summary: Registrar gasto en presupuesto
+      description: |
+        Agrega un gasto al presupuesto. Si el uso supera el `alert_threshold_pct`,
+        se genera una alerta automaticamente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordSpendRequest"
+            example:
+              amount_cents: 250000
+              currency: "USD"
+      responses:
+        "200":
+          description: Gasto registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  budget:
+                    $ref: "#/components/schemas/Budget"
+                  alert:
+                    oneOf:
+                      - $ref: "#/components/schemas/BudgetAlert"
+                      - type: "null"
+                    description: Alerta generada si se supero el umbral, null si no
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ─── Anomalies ────────────────────────────────────────────
+  /api/v1/anomalies:
+    get:
+      tags: [Anomalies]
+      summary: Listar anomalias
+      description: Retorna todas las anomalias detectadas, ordenadas por fecha de deteccion descendente.
+      responses:
+        "200":
+          description: Lista de anomalias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Anomaly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/anomalies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    get:
+      tags: [Anomalies]
+      summary: Obtener anomalia por ID
+      responses:
+        "200":
+          description: Anomalia encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Anomaly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/anomalies/{id}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    post:
+      tags: [Anomalies]
+      summary: Resolver anomalia
+      description: Marca una anomalia abierta como resuelta. No se puede resolver una anomalia ya resuelta.
+      responses:
+        "200":
+          description: Anomalia resuelta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Anomaly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Anomalia ya resuelta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Cost Reports ────────────────────────────────────────
+  /api/v1/cost-reports:
+    post:
+      tags: [Cost Reports]
+      summary: Generar reporte de costos
+      description: |
+        Genera un reporte agregando todos los registros de costos dentro del periodo especificado.
+        El reporte incluye desglose por servicio y total consolidado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateCostReportRequest"
+            example:
+              name: "Reporte Febrero 2026"
+              report_type: "monthly"
+              period_start: "2026-02-01"
+              period_end: "2026-02-28"
+              currency: "USD"
+      responses:
+        "201":
+          description: Reporte generado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Cost Reports]
+      summary: Listar reportes
+      responses:
+        "200":
+          description: Lista de reportes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/cost-reports/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+
+    get:
+      tags: [Cost Reports]
+      summary: Obtener reporte por ID
+      responses:
+        "200":
+          description: Reporte encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ═══════════════════════════════════════════════════════════
+# Components
+# ═══════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT con claims: `user_id` (UUID), `tenant_id` (UUID), `email` (string), `role` (string).
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID del recurso
+
+  responses:
+    BadRequest:
+      description: Request invalido
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: No autenticado o token invalido
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "invalid or expired token"
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnprocessableEntity:
+      description: Error de validacion de negocio
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensaje de error
+      required: [error]
+
+    # ── Tenant ──
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Acme Corporation"
+        slug:
+          type: string
+          example: "acme-corp"
+        db_name:
+          type: string
+          example: "cf_tenant_550e8400"
+        status:
+          type: string
+          enum: [active, suspended]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTenantRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Nombre del tenant
+        slug:
+          type: string
+          minLength: 1
+          description: Slug unico para identificar al tenant
+
+    UpdateTenantRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    # ── Cloud Account ──
+    CloudAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [aws, gcp, azure]
+        name:
+          type: string
+          example: "Production AWS"
+        external_id:
+          type: string
+          example: "123456789012"
+        status:
+          type: string
+          enum: [active, inactive]
+        sync_status:
+          type: string
+          enum: [idle, running, failed]
+        last_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateCloudAccountRequest:
+      type: object
+      required: [provider, name, external_id]
+      properties:
+        provider:
+          type: string
+          enum: [aws, gcp, azure]
+          description: Proveedor cloud
+        name:
+          type: string
+          description: Nombre descriptivo de la cuenta
+        external_id:
+          type: string
+          description: ID externo de la cuenta (ej. AWS Account ID)
+
+    UpdateCloudAccountRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    # ── Cost Record ──
+    CostRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        cloud_account_id:
+          type: string
+          format: uuid
+        service:
+          type: string
+          example: "Amazon EC2"
+        category:
+          type: string
+          enum: [compute, storage, network, database, analytics, ml, other]
+        amount_cents:
+          type: integer
+          format: int64
+          description: Monto en centavos
+          example: 15023
+        currency:
+          type: string
+          example: "USD"
+        usage_date:
+          type: string
+          format: date
+          example: "2026-02-10"
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            environment: "production"
+            team: "platform"
+        created_at:
+          type: string
+          format: date-time
+
+    CreateCostRecordRequest:
+      type: object
+      required: [cloud_account_id, service, amount_cents, usage_date]
+      properties:
+        cloud_account_id:
+          type: string
+          format: uuid
+        service:
+          type: string
+        amount_cents:
+          type: integer
+          format: int64
+          minimum: 0
+        currency:
+          type: string
+          default: "USD"
+        usage_date:
+          type: string
+          format: date
+          description: Formato YYYY-MM-DD
+
+    PaginatedCostRecords:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CostRecord"
+        total_count:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    # ── Budget ──
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Q1 2026 Infra"
+        amount_cents:
+          type: integer
+          format: int64
+          description: Limite del presupuesto en centavos
+          example: 5000000
+        currency:
+          type: string
+          example: "USD"
+        spent_cents:
+          type: integer
+          format: int64
+          description: Gasto acumulado en centavos
+          example: 3200000
+        usage_pct:
+          type: integer
+          description: Porcentaje de uso (spent/amount * 100)
+          example: 64
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        alert_threshold_pct:
+          type: integer
+          description: Porcentaje a partir del cual se generan alertas
+          example: 80
+        status:
+          type: string
+          enum: [active, closed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateBudgetRequest:
+      type: object
+      required: [name, amount_cents, period_start, period_end]
+      properties:
+        name:
+          type: string
+        amount_cents:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          default: "USD"
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        alert_threshold_pct:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 80
+
+    UpdateBudgetRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    RecordSpendRequest:
+      type: object
+      required: [amount_cents]
+      properties:
+        amount_cents:
+          type: integer
+          format: int64
+          minimum: 0
+        currency:
+          type: string
+          default: "USD"
+
+    BudgetAlert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        budget_id:
+          type: string
+          format: uuid
+        threshold_pct:
+          type: integer
+          description: Umbral configurado
+        actual_pct:
+          type: integer
+          description: Porcentaje real al momento de la alerta
+        message:
+          type: string
+          example: "Budget usage at 85% (threshold: 80%)"
+        triggered_at:
+          type: string
+          format: date-time
+
+    # ── Anomaly ──
+    Anomaly:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        cloud_account_id:
+          type: string
+          format: uuid
+        service:
+          type: string
+          example: "Amazon RDS"
+        expected_cents:
+          type: integer
+          format: int64
+          description: Costo esperado en centavos
+        actual_cents:
+          type: integer
+          format: int64
+          description: Costo real en centavos
+        currency:
+          type: string
+        deviation_pct:
+          type: number
+          format: double
+          description: Porcentaje de desviacion
+          example: 125.5
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: |
+            Clasificacion automatica:
+            - low: <50% desviacion
+            - medium: 50-99%
+            - high: 100-199%
+            - critical: >=200%
+        status:
+          type: string
+          enum: [open, resolved]
+        detected_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── Cost Report ──
+    CostReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Reporte Febrero 2026"
+        report_type:
+          type: string
+          enum: [daily, weekly, monthly, custom]
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        total_cents:
+          type: integer
+          format: int64
+          description: Total consolidado en centavos
+        currency:
+          type: string
+        breakdown:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          description: Desglose por servicio (servicio -> centavos)
+          example:
+            "Amazon EC2": 350000
+            "Amazon S3": 120000
+            "Amazon RDS": 280000
+        generated_at:
+          type: string
+          format: date-time
+
+    GenerateCostReportRequest:
+      type: object
+      required: [name, report_type, period_start, period_end]
+      properties:
+        name:
+          type: string
+        report_type:
+          type: string
+          enum: [daily, weekly, monthly, custom]
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        currency:
+          type: string
+          default: "USD"

@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+database:
+  host: localhost
+  port: 5432
+  user: costforensics
+  password: localdev
+  system_name: costforensics_system
+  sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+
+log:
+  level: debug
+  format: text
+
+auth:
+  jwt_secret: dev-secret-change-in-production
