@@ -510,7 +510,165 @@ Formato de error:
 }
 ```
 
-## 11. Especificacion OpenAPI
+## 11. Importacion CSV
+
+### 11.1 Subir un CSV
+
+```bash
+curl -X POST http://localhost:8080/api/v1/imports/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@datos.csv" \
+  -F "entity_type=products" \
+  -F "name=Importacion Febrero 2026"
+```
+
+**Parametros del formulario**:
+
+| Parametro | Tipo | Requerido | Descripcion |
+|---|---|---|---|
+| `file` | file | Si | Archivo CSV (la primera fila debe ser el encabezado) |
+| `entity_type` | string | Si | Tipo de entidad: `products`, `orders`, `sellers`, `customers`, `cost_records` |
+| `name` | string | No | Nombre descriptivo del job (default: `"CSV Import"`) |
+
+### 11.2 Formato General
+
+- **Delimitador**: coma (`,`)
+- **Primera fila**: encabezados (nombres de columna)
+- **Encoding**: UTF-8
+- Los espacios al inicio de cada campo se recortan automaticamente
+
+### 11.3 Formato por Tipo de Entidad
+
+#### `products`
+
+| Columna | Tipo | Requerido | Descripcion |
+|---|---|---|---|
+| `sku` | string | Si | Codigo unico del producto |
+| `name` | string | Si | Nombre del producto |
+| `description` | string | No | Descripcion del producto |
+| `category` | string | No | Categoria (ej: `electronics`, `accessories`) |
+| `ean` | string | No | Codigo EAN-13 |
+| `upc` | string | No | Codigo UPC |
+| `unit_cost_cents` | int | Si | Costo unitario en centavos |
+| `unit_price_cents` | int | Si | Precio de venta en centavos |
+| `currency` | string | No | Moneda (default: `USD`) |
+
+Ejemplo:
+```csv
+sku,name,description,category,ean,upc,unit_cost_cents,unit_price_cents,currency
+ELEC-LAPTOP-001,ProBook Laptop 15",15-inch business laptop,electronics,5901234123457,012345678905,65000,119900,USD
+ELEC-CABLE-001,USB-C Cable 2m,Braided USB-C cable,accessories,5901234123495,012345678943,300,1499,USD
+```
+
+> **Nota**: `unit_price_cents` debe ser mayor o igual a `unit_cost_cents`.
+
+#### `sellers`
+
+| Columna | Tipo | Requerido | Descripcion |
+|---|---|---|---|
+| `external_id` | string | No | ID externo del vendedor |
+| `code` | string | No | Codigo del vendedor (ej: `TD100`) |
+| `name` | string | Si | Nombre del vendedor |
+| `email` | string | No | Email de contacto |
+| `commission_pct` | float | No | Porcentaje de comision (0-100) |
+
+Ejemplo:
+```csv
+external_id,code,name,email,commission_pct
+S-001,TD100,TechDirect,sales@techdirect.com,8.0
+S-002,GH200,GadgetHub,contact@gadgethub.com,10.0
+```
+
+#### `customers`
+
+| Columna | Tipo | Requerido | Descripcion |
+|---|---|---|---|
+| `external_id` | string | No | ID externo del cliente |
+| `name` | string | Si | Nombre del cliente |
+| `email` | string | No | Email de contacto |
+| `segment` | string | No | Segmento: `enterprise`, `mid-market`, `smb`, `consumer` |
+
+Ejemplo:
+```csv
+external_id,name,email,segment
+C-001,Acme Corporation,procurement@acme.com,enterprise
+C-002,Jane Smith,jane.smith@email.com,consumer
+```
+
+#### `orders`
+
+| Columna | Tipo | Requerido | Descripcion |
+|---|---|---|---|
+| `external_id` | string | Si | ID externo de la orden |
+| `seller_id` | UUID | Si | ID del vendedor en el sistema |
+| `customer_id` | UUID | Si | ID del cliente en el sistema |
+| `currency` | string | No | Moneda (default: `USD`) |
+
+Ejemplo:
+```csv
+external_id,seller_id,customer_id,currency
+ORD-001,550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440001,USD
+ORD-002,550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440002,USD
+```
+
+#### `cost_records`
+
+| Columna | Tipo | Requerido | Descripcion |
+|---|---|---|---|
+| `cloud_account_id` | UUID | Si | ID de la cuenta cloud |
+| `service` | string | Si | Nombre del servicio (ej: `Amazon EC2`, `Cloud SQL`) |
+| `amount_cents` | int | Si | Monto en centavos |
+| `currency` | string | No | Moneda (default: `USD`) |
+| `usage_date` | date | Si | Fecha de uso (`YYYY-MM-DD`) |
+
+Ejemplo:
+```csv
+cloud_account_id,service,amount_cents,currency,usage_date
+550e8400-e29b-41d4-a716-446655440000,Amazon EC2,1500000,USD,2026-02-15
+550e8400-e29b-41d4-a716-446655440000,Amazon S3,110000,USD,2026-02-15
+```
+
+> La categoria (`compute`, `storage`, `network`, etc.) se asigna automaticamente segun el nombre del servicio.
+
+### 11.4 Consultar Estado de una Importacion
+
+```bash
+curl http://localhost:8080/api/v1/imports/{id} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Respuesta:
+```json
+{
+  "id": "...",
+  "name": "Importacion Febrero 2026",
+  "source": "csv_upload",
+  "entity_type": "products",
+  "status": "completed",
+  "total_rows": 150,
+  "processed_rows": 150,
+  "failed_rows": 0,
+  "error_log": [],
+  "started_at": "2026-02-11T10:00:01Z",
+  "completed_at": "2026-02-11T10:00:05Z",
+  "created_at": "2026-02-11T10:00:00Z"
+}
+```
+
+**Estados posibles**:
+- `pending` — Job creado, aun no comienza a procesar
+- `processing` — Procesando filas del CSV
+- `completed` — Todas las filas procesadas
+- `failed` — Error critico (ej: CSV malformado)
+
+### 11.5 Listar Importaciones
+
+```bash
+curl "http://localhost:8080/api/v1/imports?status=completed&entity_type=products&page=1&page_size=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## 12. Especificacion OpenAPI
 
 La especificacion completa de la API esta disponible en `docs/swagger.yaml`.
 
@@ -518,7 +676,7 @@ Para visualizarla interactivamente, se puede usar:
 - [Swagger Editor](https://editor.swagger.io/) — pegar el contenido del YAML
 - [Swagger UI](https://petstore.swagger.io/) — apuntar a la URL del archivo
 
-## 12. Limites y Consideraciones
+## 13. Limites y Consideraciones
 
 - **Paginacion**: Maximo 100 registros por pagina (`page_size` max: 100)
 - **Montos**: Siempre en centavos (int64). No se aceptan montos negativos.
