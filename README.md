@@ -374,5 +374,6 @@ make docker-down      # Stop Docker services
 - [User Manual](docs/MANUAL_USO.md) — API usage with curl examples, frontend guide, error reference
 
 ## License
+MIT License
 
-Private — All rights reserved.
+Copyright (c) 2026 Diogenes Moreira
